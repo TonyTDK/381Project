@@ -1,0 +1,19 @@
+<html>
+<script>
+function submitAction(f, inputAction){
+	document.inputForm.action = inputAction;
+	f.submit();
+}
+</script>
+<body>
+<form name="inputForm" method="post" action="/addGrades">
+	<h1>Restaurant ID:<br/>
+	<input type="text" name="restaurant_id" /></h1>
+	<h1>Address:</h1>
+	Date: <input type="text" name="date" /><br /><br />
+	Grades: <input type="text" name="grade" /><br /><br />
+	Score: <input type="number" step="any" name="score"/><br />
+	<input type="submit" value="Add" />
+</form>
+</body>
+</html>

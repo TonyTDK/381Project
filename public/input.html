@@ -1,0 +1,26 @@
+<html>
+<script>
+function submitAction(f, inputAction){
+	document.inputForm.action = inputAction;
+	f.submit();
+}
+</script>
+<body>
+<form name="inputForm" method="post" action="/new">
+	<h1>Name of restaurant:<br/>
+	<input type="text" name="name" /></h1>
+	<h1>Address:</h1>
+	Building: <input type="text" name="building" /><br /><br />
+	Street: <input type="text" name="street" /><br /><br />
+	Zipcode: <input type="text" name="zipcode" /><br />
+	<h1>Coordinates:</h1>
+	Longitude: <input type="number" step="any" name="coord1"/><br /><br />
+	Latitude: <input type="number" step="any" name="coord2" />
+	<h1>Other Info:</h1>
+	Borough: <input type="text" name="borough" /><br /><br />
+	Cuisine: <input type="text" name="cuisine" /><br /><br />
+	Restaurant_id: <input type="text" name="restaurant_id" /><br /><br />
+	<input type="submit" value="Add" />
+</form>
+</body>
+</html>
