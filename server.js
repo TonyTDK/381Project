@@ -50,10 +50,6 @@ app.post('/addRes', urlencodedParser, function(req,res) {
 	
 	if ((req.body.name == null) || (req.body.name == '')){
 		err.msg = 'Required Name fields missing!';
-	}else if ((req.body.borough == null) || (req.body.borough == '')){
-		err.msg = 'Required Borough fields missing!';
-	}else if ((req.body.cuisine == null) || (req.body.cuisine == '')){
-		err.msg = 'Required Cuisine fields missing!';
 	}else if ((req.body.restaurant_id == null) || (req.body.restaurant_id == '')){
 		err.msg = 'Required Restaurant ID fields missing!';
 	}
@@ -125,7 +121,11 @@ app.post('/addRes', urlencodedParser, function(req,res) {
 	}
 });
 
-
+var gradeSchema = mongoose.Schema({
+				date: Date, 
+				grade: String, 
+				score: Number,
+			});
 			
 app.post('/addGrades', urlencodedParser, function(req,res) {
 	var err = {
@@ -168,11 +168,7 @@ app.post('/addGrades', urlencodedParser, function(req,res) {
 			modelObj = mongoose.model("restaurant", restaurantSchema);
 			var queryObj = req.body;
 			
-			var gradeSchema = mongoose.Schema({
-				date: Date, 
-				grade: String, 
-				score: Number,
-			});
+			
 			gradeModel = mongoose.model('gradeSchema', gradeSchema);
 			var newObject = {
 				date : Date,
@@ -387,6 +383,86 @@ app.delete('/delGradesByID', urlencodedParser, function(req,res) {
 										'code' : 0
 									};
 									success.code = 0;
+									res.writeHead(200, {'Content-type' : 'application/JSON'});
+									res.end(JSON.stringify(success));
+									db.close();
+								}
+							}
+						);
+					}
+				}
+			);
+		});
+					
+	}
+});
+
+
+app.delete('/delGradesSpecificly', urlencodedParser, function(req,res) {
+	var err = {
+		'msg' : '',
+		'code' : 0
+	};
+	
+	if ((req.body.restaurant_id == null) || (req.body.restaurant_id == '') || (req.body.date == null) || (req.body.date == '') || (req.body.grade == null) || (req.body.grade == '') || (req.body.score == null) || (req.body.score == '')) {
+		err.msg = 'The target grades record is not specific mentioned!';
+		err.code = 40;
+		res.writeHead(404, {'Content-type' : 'application/JSON'});
+		res.end(JSON.stringify(err));
+	}else{
+		mongoose.connect(MONGODBURL);
+		var targetResName = '';
+		var db = mongoose.connection;
+		db.on('error', function(){
+			err.msg = 'Cannot connect to database server!';
+			err.code = 1;
+			res.writeHead(404, {'Content-type' : 'application/JSON'});
+			res.end(JSON.stringify(err));
+			db.close();
+		});
+		db.once('open', function(callback){
+			modelObj = mongoose.model("restaurant", restaurantSchema);
+			var queryObj = req.body;
+			var ObjectId = require('mongoose').Types.ObjectId;
+			modelObj.find(
+			
+				{grades : {$elemMatch : {date : new Date(queryObj.date), grade : queryObj.grade, score : parseFloat(queryObj.score)}}, restaurant_id : queryObj.restaurant_id},
+				
+				function(error, results){
+					if (error != null){
+						err.msg = 'Error occour while saving the new record! Detail = ' + error;
+						err.code = 42;
+						res.writeHead(404, {'Content-type' : 'application/JSON'});
+						res.end(JSON.stringify(err));
+						db.close();
+					}else if (results.length == 0){
+						err.msg = 'No grades record match!';
+						err.code = 43;
+						res.writeHead(404, {'Content-type' : 'application/JSON'});
+						res.end(JSON.stringify(err));
+						db.close();
+					}else{
+						var ress = [];
+						for (i in results[0].grades){
+							if ((new Date(results[0].grades[0].date).toISOString() == new Date(queryObj.date).toISOString()) && (results[0].grades[i].grade == queryObj.grade) && (results[0].grades[i].score == queryObj.score)){
+								ress.push(results[0].grades[i]._id);
+							}
+						}
+						modelObj.update (
+							{"restaurant_id" : results[0].restaurant_id},
+							{$pull : {grades : {_id : {$in : ress}}}},
+							function ( error ) {
+								if (error != null){
+									err.msg = 'Error occour deleting the grades record! Detail = ' + JSON.stringify(error);
+									err.code = 44;
+									res.writeHead(404, {'Content-type' : 'application/JSON'});
+									res.end(JSON.stringify(err));
+									db.close();
+								}else{									
+									var success = {
+										'msg' : "Success!",
+										'code' : 0
+									};;
 									res.writeHead(200, {'Content-type' : 'application/JSON'});
 									res.end(JSON.stringify(success));
 									db.close();
@@ -923,7 +999,268 @@ app.get('/showAllResFullRecord', function(req,res) {
 	});
 });
 
-
+app.get("/searchByScore/:sortOption/:sortOption2", function(req,res) {
+	var err = {
+		'msg' : '',
+		'code' : 0
+	};
+	mongoose.connect(MONGODBURL);
+	var db = mongoose.connection;
+	db.on('error', function(){
+		err.msg = 'Cannot connect to database server!';
+		err.code = 1;
+		res.writeHead(404, {'Content-type' : 'application/JSON'});
+		res.end(JSON.stringify(err));
+		db.close();
+	});
+	db.once('open', function(callback){
+		modelObj = mongoose.model("restaurant", restaurantSchema);
+		var query = {};
+		var match = null;
+		
+			
+		
+			if (req.params.sortOption == "gt"){
+				modelObj.aggregate(
+					{$unwind : "$grades"},
+					{$group : {_id : "$restaurant_id", result : {$avg : "$grades.score"}}},
+					{$match : {result : {$gt : parseFloat(req.params.sortOption2)}}},
+					{$project : {_id : 1}},
+					function(error, results){
+						if (error != null){
+							err.msg = 'Error occour while showing all the record! Detail = ' + error;
+							err.code = 120;
+							res.writeHead(404, {'Content-type' : 'application/JSON'});
+							res.end(JSON.stringify(err));
+							db.close();
+						}else if (results.length == 0){
+							err.msg = 'No search result.';
+							err.code = 121;
+							res.writeHead(404, {'Content-type' : 'application/JSON'});
+							res.end(JSON.stringify(err));
+							db.close();
+						}
+						else{
+							var ress = [];
+							for (i in results){
+								ress.push(results[i]._id);
+							}
+							modelObj.find(
+								{restaurant_id : {$in : ress}},
+								function(error, results){
+									if (error != null){
+										err.msg = 'Error occour while showing all the record! Detail = ' + error;
+										err.code = 120;
+										res.writeHead(404, {'Content-type' : 'application/JSON'});
+										res.end(JSON.stringify(err));
+										db.close();
+									}else if (results.length == 0){
+										err.msg = 'No search result.';
+										err.code = 121;
+										res.writeHead(404, {'Content-type' : 'application/JSON'});
+										res.end(JSON.stringify(err));
+										db.close();
+									}
+									else{
+										res.writeHead(200, {'Content-type' : 'application/JSON'});
+										res.write(JSON.stringify(results));
+										res.end();
+										db.close();
+									}
+								}
+							);
+						}
+					}
+				);
+			}else if (req.params.sortOption == "lt"){
+				modelObj.aggregate(
+					{$unwind : "$grades"},
+					{$group : {_id : "$restaurant_id", result : {$avg : "$grades.score"}}},
+					{$match : {result : {$lt : parseFloat(req.params.sortOption2)}}},
+					{$project : {_id : 1}},
+					function(error, results){
+						if (error != null){
+							err.msg = 'Error occour while showing all the record! Detail = ' + error;
+							err.code = 120;
+							res.writeHead(404, {'Content-type' : 'application/JSON'});
+							res.end(JSON.stringify(err));
+							db.close();
+						}else if (results.length == 0){
+							err.msg = 'No search result.';
+							err.code = 121;
+							res.writeHead(404, {'Content-type' : 'application/JSON'});
+							res.end(JSON.stringify(err));
+							db.close();
+						}
+						else{
+							var ress = [];
+							for (i in results){
+								ress.push(results[i]._id);
+							}
+							modelObj.find(
+								{restaurant_id : {$in : ress}},
+								function(error, results){
+									if (error != null){
+										err.msg = 'Error occour while showing all the record! Detail = ' + error;
+										err.code = 120;
+										res.writeHead(404, {'Content-type' : 'application/JSON'});
+										res.end(JSON.stringify(err));
+										db.close();
+									}else if (results.length == 0){
+										err.msg = 'No search result.';
+										err.code = 121;
+										res.writeHead(404, {'Content-type' : 'application/JSON'});
+										res.end(JSON.stringify(err));
+										db.close();
+									}
+									else{
+										res.writeHead(200, {'Content-type' : 'application/JSON'});
+										res.write(JSON.stringify(results));
+										res.end();
+										db.close();
+									}
+								}
+							);
+						}
+					}
+				);
+			}else if (req.params.sortOption == "lte"){
+				modelObj.aggregate(
+					{$unwind : "$grades"},
+					{$group : {_id : "$restaurant_id", result : {$avg : "$grades.score"}}},
+					{$match : {result : {$lte : parseFloat(req.params.sortOption2)}}},
+					{$project : {_id : 1}},
+					function(error, results){
+						if (error != null){
+							err.msg = 'Error occour while showing all the record! Detail = ' + error;
+							err.code = 120;
+							res.writeHead(404, {'Content-type' : 'application/JSON'});
+							res.end(JSON.stringify(err));
+							db.close();
+						}else if (results.length == 0){
+							err.msg = 'No search result.';
+							err.code = 121;
+							res.writeHead(404, {'Content-type' : 'application/JSON'});
+							res.end(JSON.stringify(err));
+							db.close();
+						}
+						else{
+							var ress = [];
+							for (i in results){
+								ress.push(results[i]._id);
+							}
+							modelObj.find(
+								{restaurant_id : {$in : ress}},
+								function(error, results){
+									if (error != null){
+										err.msg = 'Error occour while showing all the record! Detail = ' + error;
+										err.code = 120;
+										res.writeHead(404, {'Content-type' : 'application/JSON'});
+										res.end(JSON.stringify(err));
+										db.close();
+									}else if (results.length == 0){
+										err.msg = 'No search result.';
+										err.code = 121;
+										res.writeHead(404, {'Content-type' : 'application/JSON'});
+										res.end(JSON.stringify(err));
+										db.close();
+									}
+									else{
+										res.writeHead(200, {'Content-type' : 'application/JSON'});
+										res.write(JSON.stringify(results));
+										res.end();
+										db.close();
+									}
+								}
+							);
+						}
+					}
+				);
+			}else if (req.params.sortOption == "gte"){
+				modelObj.aggregate(
+					{$unwind : "$grades"},
+					{$group : {_id : "$restaurant_id", result : {$avg : "$grades.score"}}},
+					{$match : {result : {$gte : parseFloat(req.params.sortOption2)}}},
+					{$project : {_id : 1}},
+					function(error, results){
+						if (error != null){
+							err.msg = 'Error occour while showing all the record! Detail = ' + error;
+							err.code = 120;
+							res.writeHead(404, {'Content-type' : 'application/JSON'});
+							res.end(JSON.stringify(err));
+							db.close();
+						}else if (results.length == 0){
+							err.msg = 'No search result.';
+							err.code = 121;
+							res.writeHead(404, {'Content-type' : 'application/JSON'});
+							res.end(JSON.stringify(err));
+							db.close();
+						}
+						else{
+							var ress = [];
+							for (i in results){
+								ress.push(results[i]._id);
+							}
+							modelObj.find(
+								{restaurant_id : {$in : ress}},
+								function(error, results){
+									if (error != null){
+										err.msg = 'Error occour while showing all the record! Detail = ' + error;
+										err.code = 120;
+										res.writeHead(404, {'Content-type' : 'application/JSON'});
+										res.end(JSON.stringify(err));
+										db.close();
+									}else if (results.length == 0){
+										err.msg = 'No search result.';
+										err.code = 121;
+										res.writeHead(404, {'Content-type' : 'application/JSON'});
+										res.end(JSON.stringify(err));
+										db.close();
+									}
+									else{
+										res.writeHead(200, {'Content-type' : 'application/JSON'});
+										res.write(JSON.stringify(results));
+										res.end();
+										db.close();
+									}
+								}
+							);
+						}
+					}
+				);
+			}else{
+				modelObj.aggregate(
+					{$unwind : "$grades"},
+					{$group : {_id : {id : "$restaurant_id", name : "$name"}, result : {$avg : "$grades.score"}}},
+					{$match : {result : parseFloat(req.params.sortOption2)}},
+					function(error, results){
+						if (error != null){
+							err.msg = 'Error occour while showing all the record! Detail = ' + error;
+							err.code = 120;
+							res.writeHead(404, {'Content-type' : 'application/JSON'});
+							res.end(JSON.stringify(err));
+							db.close();
+						}else if (results.length == 0){
+							err.msg = 'No search result.';
+							err.code = 121;
+							res.writeHead(404, {'Content-type' : 'application/JSON'});
+							res.end(JSON.stringify(err));
+							db.close();
+						}
+						else{
+							res.writeHead(200, {'Content-type' : 'application/JSON'});
+							res.write(JSON.stringify(results));
+							res.end();
+							db.close();
+						}
+					}
+				);
+			}
+			
+		
+		
+	});
+});
 
 app.get(/^\/search\/(.*)+/, function(req,res) {
 	var err = {
